@@ -1,0 +1,167 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="icon" href="data:">
+<title>liquidfun demo - IchigoJam logo</title>
+</head><body>
+
+<div id="viz"></div>
+
+<!-- https://cdnjs.com/libraries/d3/3.5.17 -->
+<script src="./d3_v3.min.js"></script>
+
+<script type="module">
+// forked from https://qiita.com/Quramy/items/578efec667267acf6871
+import {
+  b2Vec2, b2World, b2BodyDef, b2ChainShape, b2ParticleSystemDef, b2MassData, b2PolygonShape, b2ParticleGroupDef,
+  b2_staticBody, b2_kinematicBody, b2_dynamicBody,
+} from "./liquidfun_fixed.js";
+import { D3Renderer } from "./D3Renderer.js";
+
+const boundsNodes = [[-2, 0], [2, 0], [2, 4], [-2, 4]];
+
+const z = -2;
+const w = 0.1;
+
+const box = (x, y) => {
+  const w = 0.1;
+  const c = n => n * w;
+  const x1 = c(x) - 1.8;
+  const y1 = c(y) + .5;
+  const x2 = x1 + w;
+  const y2 = y1 + w;
+  const nodes = [[x1, y1], [x2, y1], [x2, y2], [x1, y2]];
+  const pos = [0, 0];
+	return { nodes, pos };
+};
+
+const draw = (res, x1, y1, x2, y2) => {
+  if (x1 == x2) {
+    if (y1 > y2) {
+      for (let i = y2; i <= y1; i++) {
+        res.push(box(x1, i));
+      }
+    } else {
+      for (let i = y1; i <= y2; i++) {
+        res.push(box(x1, i));
+      }
+    }
+  } else if (y1 == y2) {
+    if (x1 > x2) {
+      for (let i = x2; i <= x1; i++) {
+        res.push(box(i, y1));
+      }
+    } else {
+      for (let i = x1; i <= x2; i++) {
+        res.push(box(i, y1));
+      }
+    }
+  } else {
+    throw new Error("not supported yet!");
+  }
+}
+
+const makeLogo = (logo, x = 0, y = 0) => {
+  const res = [];
+  let p = 0;
+  for (;;) {
+    draw(
+      res,
+      logo[p] + x,
+      10 - (logo[p + 1] + y),
+      logo[p + 2] + x,
+      10 - (logo[p + 3] + y)
+    );
+    if (logo[p + 4] == 100) {
+      break;
+    }
+    if (logo[p + 4] == 99) {
+      p += 5;
+    } else {
+      p += 2;
+    }
+  }
+  return res;
+};
+
+const logo = [
+  1,0,1,4,99,5,2,3,2,3,4,5,4,99,7,0,7,4,99,7,2,9,2,9,2,9,4,99,11,2,11,4,99,15,4,13,4,13,2,15,2,15,6,13,6,99,19,2,17,2,17,4,19,4,19,2,99,
+  23,0,23,4,21,4,99,27,4,27,2,25,2,25,4,28,4,99,29,2,34,2,34,4,99,30,2,30,4,99,32,2,32,4,99,1,6,11,6,99,17,6,34,6,99,
+  11,0,11,0,100,
+];
+
+const floaters = makeLogo(logo);
+const pgDefs = [
+  { nodes: [[0, 4], [2, 4], [2, 3], [0, 3.5]] },
+	{ nodes: [[0, 4], [-2, 4], [-2, 3], [0, 3.5]] },
+];
+
+const velocityIterations = 8;
+const positionIterations = 3;
+
+const gravity = new b2Vec2(0, -10);
+const world = new b2World(gravity);
+
+const init = () => {
+  const boundsBody = world.CreateBody(new b2BodyDef());
+  const boxShape = new b2ChainShape();
+  boxShape.vertices = boundsNodes.map(node => new b2Vec2(node[0], node[1]));
+  boxShape.CreateLoop();
+  boundsBody.CreateFixtureFromShape(boxShape, 0);
+
+  floaters.forEach(floaterDef => {
+    const dynamicBodyDef = new b2BodyDef();
+    //dynamicBodyDef.type = b2_dynamicBody;
+    //dynamicBodyDef.type = b2_kinematicBody;
+    dynamicBodyDef.type = b2_staticBody;
+    const body = world.CreateBody(dynamicBodyDef);
+    const shape = new b2ChainShape();
+    shape.vertices = floaterDef.nodes.map(node => new b2Vec2(node[0], node[1]));
+    shape.CreateLoop();
+    body.CreateFixtureFromShape(shape, 1);
+    body.SetTransform(new b2Vec2(floaterDef.pos[0], floaterDef.pos[1]), 0);
+    body.SetMassData(new b2MassData(0.1, new b2Vec2(0, 0), 0.03));
+  });
+
+  // Particle
+  const psd = new b2ParticleSystemDef();
+  psd.radius = 0.02;
+  //psd.radius = 0.02;
+  //psd.dampingStrength = 0.1;
+  psd.dampingStrength = 1.5;
+
+  const particleSystem = world.CreateParticleSystem(psd);
+
+  pgDefs.forEach(def => {
+    const shape = new b2PolygonShape();
+    shape.vertices = def.nodes.map(node => new b2Vec2(node[0], node[1]));
+    const pd = new b2ParticleGroupDef();
+    pd.shape = shape;
+    particleSystem.CreateParticleGroup(pd);
+  });
+};
+
+let bkt = performance.now();
+const update = () => {
+  //const timeStep = 1.0 / 120.0;
+  const t = performance.now();
+  const timeStep = (t - bkt) / 1000;
+  bkt = t;
+
+  world.Step(timeStep, velocityIterations, positionIterations);
+};
+
+init();
+const d3Renderer = new D3Renderer();
+onresize = d3Renderer.resize;
+
+//const freezet = 1000;
+const freezet = 0;
+
+const render = () => {
+  update();
+	d3Renderer.render(world);
+  if (freezet && performance.now() > freezet) return;
+	requestAnimationFrame(render);
+};
+render();
+</script>
+
+</body></html>

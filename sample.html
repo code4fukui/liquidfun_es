@@ -1,0 +1,97 @@
+<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><link rel="icon" href="data:">
+<title>liquidfun demo</title>
+</head><body>
+
+<div id="viz"></div>
+
+<!-- https://cdnjs.com/libraries/d3/3.5.17 -->
+<script src="./d3_v3.min.js"></script>
+
+<script type="module">
+// forked from https://qiita.com/Quramy/items/578efec667267acf6871
+import {
+  b2Vec2, b2World, b2BodyDef, b2ChainShape, b2ParticleSystemDef, b2MassData, b2PolygonShape, b2ParticleGroupDef,
+  b2_staticBody, b2_kinematicBody, b2_dynamicBody,
+} from "./liquidfun_fixed.js";
+import { D3Renderer } from "./D3Renderer.js";
+
+const boundsNodes = [[-2, 0], [2, 0], [2, 4], [-2, 4]];
+const floaters = [
+	{ nodes: [[-0.1, -0.2], [0.1, -0.2], [0.1, 0.2], [-0.1, 0.2]], pos: [0.5, 2] },
+	{ nodes: [[0, 0.2], [0.1732, -0.0866], [-0.1732, -0.0866]], pos: [-1.5, 3] },
+	//{ nodes: [[-0.1, -0.2], [0.1, -0.2], [0.1, 0.2], [-0.1, 0.2]], pos: [1, 2] },
+	//{ nodes: [[0, 0.2], [0.1732, -0.0866], [-0.1732, -0.0866]], pos: [-1., 3] },
+];
+const pgDefs = [
+  { nodes: [[0.5, 0.1], [1.9, 0.1], [1.9, 2.5], [0.5, 1.0]] },
+	{ nodes: [[-0.5, 0.1], [-1.9, 0.1], [-1.9, 2.5], [-0.5, 1.0]] },
+];
+
+const velocityIterations = 8;
+const positionIterations = 3;
+
+const gravity = new b2Vec2(0, -10);
+const world = new b2World(gravity);
+
+const init = () => {
+  const boundsBody = world.CreateBody(new b2BodyDef());
+  const boxShape = new b2ChainShape();
+  boxShape.vertices = boundsNodes.map(node => new b2Vec2(node[0], node[1]));
+  boxShape.CreateLoop();
+  boundsBody.CreateFixtureFromShape(boxShape, 0);
+
+  floaters.forEach(floaterDef => {
+    const dynamicBodyDef = new b2BodyDef();
+    dynamicBodyDef.type = b2_dynamicBody;
+    //dynamicBodyDef.type = b2_kinematicBody;
+    //dynamicBodyDef.type = b2_staticBody;
+    const body = world.CreateBody(dynamicBodyDef);
+    const shape = new b2ChainShape();
+    shape.vertices = floaterDef.nodes.map(node => new b2Vec2(node[0], node[1]));
+    shape.CreateLoop();
+    body.CreateFixtureFromShape(shape, 1);
+    body.SetTransform(new b2Vec2(floaterDef.pos[0], floaterDef.pos[1]), 0);
+    body.SetMassData(new b2MassData(0.1, new b2Vec2(0, 0), 0.03));
+  });
+
+  // Particle
+  const psd = new b2ParticleSystemDef();
+  //psd.radius = 0.03;
+  psd.radius = 0.02;
+  //psd.dampingStrength = 0.1;
+  psd.dampingStrength = 1.5;
+
+  const particleSystem = world.CreateParticleSystem(psd);
+
+  pgDefs.forEach(def => {
+    const shape = new b2PolygonShape();
+    shape.vertices = def.nodes.map(node => new b2Vec2(node[0], node[1]));
+    const pd = new b2ParticleGroupDef();
+    pd.shape = shape;
+    particleSystem.CreateParticleGroup(pd);
+  });
+};
+
+let bkt = performance.now();
+const update = () => {
+  //const timeStep = 1.0 / 120.0;
+  const t = performance.now();
+  const timeStep = (t - bkt) / 1000;
+  bkt = t;
+
+  world.Step(timeStep, velocityIterations, positionIterations);
+};
+
+init();
+const d3Renderer = new D3Renderer();
+onresize = d3Renderer.resize;
+
+const render = () => {
+  update();
+	d3Renderer.render(world);
+	requestAnimationFrame(render);
+};
+render();
+</script>
+
+</body></html>
