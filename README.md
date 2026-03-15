@@ -1,6 +1,8 @@
 # liquidfun_es
 
-Based on [LiquidFun](https://google.github.io/liquidfun/).
+> 日本語のREADMEはこちらです: [README.ja.md](README.ja.md)
+
+LiquidFun is a particle-based fluid simulation library, wrapped in JavaScript and visualized using D3.js.
 
 ## Demo
 
@@ -23,4 +25,5 @@ Open the HTML files in a web browser.
 
 ## License
 
-Not specified.
+- LiquidFun: Apache License 2.0
+- liquidfun_es: MIT License
